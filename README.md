@@ -151,8 +151,11 @@ public class GigaChatService {
     private String accessToken = null;
     private long tokenExpiryTime = 0;
 
-    private final String TOKEN_URL = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth";
-    private final String API_URL = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions";
+    @Value("${gigachat.token-url}")
+    private String tokenUrl;
+
+    @Value("${gigachat.api-url}")
+    private String apiUrl;
 
     public String ask(String prompt) throws Exception {
         if (accessToken == null || System.currentTimeMillis() >= tokenExpiryTime) {
@@ -292,6 +295,10 @@ server.port=8080
 # GigaChat API credentials
 gigachat.client-id=YOUR_CLIENT_ID_HERE
 gigachat.client-secret=YOUR_CLIENT_SECRET_HERE
+
+# GigaChat API URLs
+gigachat.token-url=https://ngw.devices.sberbank.ru:9443/api/v2/oauth
+gigachat.api-url=https://gigachat.devices.sberbank.ru/api/v1/chat/completions
 
 # SSL отключён для тестов
 server.ssl.enabled=false
