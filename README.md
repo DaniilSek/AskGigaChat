@@ -214,7 +214,7 @@ public class GigaChatService {
 }
 ```
 **index.html**
-```
+```html
 <!DOCTYPE html>
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
 <head>
@@ -285,7 +285,7 @@ public class GigaChatService {
 </html>
 ```
 **application.properties**
-```
+```properties
 # Порт сервера
 server.port=8080
 
