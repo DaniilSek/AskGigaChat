@@ -181,7 +181,7 @@ public class GigaChatService {
         headers.setBearerAuth(accessToken);
 
         HttpEntity<String> entity = new HttpEntity<>(jsonBody, headers);
-        ResponseEntity<String> response = restTemplate.exchange(API_URL, HttpMethod.POST, entity, String.class);
+        ResponseEntity<String> response = restTemplate.exchange(apiUrl, HttpMethod.POST, entity, String.class);
 
         if (response.getStatusCode() == HttpStatus.OK) {
             JsonNode root = objectMapper.readTree(response.getBody());
