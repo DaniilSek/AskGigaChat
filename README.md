@@ -55,6 +55,11 @@ pom.xml
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
+        <dependency>
+                  <groupId>chat.giga</groupId>
+                  <artifactId>gigachat-java</artifactId>
+                  <version>0.1.9</version>
+         </dependency>
     </dependencies>
 
     <build>
@@ -123,95 +128,53 @@ public class GigaChatController {
 ```
 **GigaChatService.java**
 ```Java
-package com.example.demo;
+package com.application.services;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import chat.giga.client.GigaChatClient;
+import chat.giga.client.auth.AuthClient;
+import chat.giga.client.auth.AuthClientBuilder;
+import chat.giga.model.ModelName;
+import chat.giga.model.Scope;
+import chat.giga.model.completion.ChatMessage;
+import chat.giga.model.completion.CompletionRequest;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
-
-import java.util.Base64;
 
 @Service
 public class GigaChatService {
 
-    @Value("${gigachat.client-id}")
-    private String clientId;
+    private final GigaChatClient gigaChatClient;
 
-    @Value("${gigachat.client-secret}")
-    private String clientSecret;
+    public GigaChatService(
+            @Value("${gigachat.client-id}") String clientId,
+            @Value("${gigachat.client-secret}") String clientSecret,
+            @Value("${gigachat.verify-ssl:true}") boolean verifySsl) {
 
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-    private String accessToken = null;
-    private long tokenExpiryTime = 0;
-
-    @Value("${gigachat.token-url}")
-    private String tokenUrl;
-
-    @Value("${gigachat.api-url}")
-    private String apiUrl;
-
-    public String ask(String prompt) throws Exception {
-        if (accessToken == null || System.currentTimeMillis() >= tokenExpiryTime) {
-            refreshToken();
-        }
-
-        String jsonBody = """
-            {
-                "model": "GigaChat",
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": "%s"
-                    }
-                ],
-                "temperature": 0.7,
-                "max_tokens": 512
-            }
-            """.formatted(prompt);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(accessToken);
-
-        HttpEntity<String> entity = new HttpEntity<>(jsonBody, headers);
-        ResponseEntity<String> response = restTemplate.exchange(apiUrl, HttpMethod.POST, entity, String.class);
-
-        if (response.getStatusCode() == HttpStatus.OK) {
-            JsonNode root = objectMapper.readTree(response.getBody());
-            return root.path("choices").get(0).path("message").path("content").asText();
-        } else {
-            throw new RuntimeException("Ошибка API: " + response.getStatusCode() + " " + response.getBody());
-        }
+        this.gigaChatClient = GigaChatClient.builder()
+                .verifySslCerts(verifySsl)
+                .authClient(AuthClient.builder()
+                        .withOAuth(AuthClientBuilder.OAuthBuilder.builder()
+                                .scope(Scope.GIGACHAT_API_PERS)
+                                .clientId(clientId)
+                                .clientSecret(clientSecret)
+                                .build())
+                        .build())
+                .build();
     }
 
-    private void refreshToken() throws Exception {
-        String authString = "Basic " + Base64.getEncoder().encodeToString((clientId + ":" + clientSecret).getBytes());
+    public String ask(String prompt) {
+        try {
+            return gigaChatClient.completions(CompletionRequest.builder()
+                    .model(ModelName.GIGA_CHAT)
+                    .message(ChatMessage.builder()
+                            .content(prompt)
+                            .build()
+                    )
+                    .build()
+            ).toString();
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        headers.set("Authorization", authString);
-        headers.set("RqUID", java.util.UUID.randomUUID().toString());
-
-        MultiValueMap<String, String> map = new LinkedMultiValueMap<>();
-        map.add("scope", "GIGACHAT_API_PERS");
-
-        HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(map, headers);
-        ResponseEntity<String> response = restTemplate.exchange(tokenUrl, HttpMethod.POST, entity, String.class);
-
-        if (response.getStatusCode() == HttpStatus.OK) {
-            JsonNode root = objectMapper.readTree(response.getBody());
-            accessToken = root.path("access_token").asText();
-            int expiresIn = root.path("expires_in").asInt();
-            tokenExpiryTime = System.currentTimeMillis() + (expiresIn - 60) * 1000; // обновляем за минуту до истечения
-        } else {
-            throw new RuntimeException("Не удалось получить токен: " + response.getBody());
+        } catch (Exception e) {
+            throw new RuntimeException("Ошибка при обращении к GigaChat: " + e.getMessage(), e);
         }
     }
 }
@@ -289,19 +252,14 @@ public class GigaChatService {
 ```
 **application.properties**
 ```properties
-# Порт сервера
-server.port=8080
-
 # GigaChat API credentials
 gigachat.client-id=YOUR_CLIENT_ID_HERE
 gigachat.client-secret=YOUR_CLIENT_SECRET_HERE
+gigachat.verify-ssl=false
 
 # GigaChat API URLs
 gigachat.token-url=https://ngw.devices.sberbank.ru:9443/api/v2/oauth
 gigachat.api-url=https://gigachat.devices.sberbank.ru/api/v1/chat/completions
-
-# SSL отключён для тестов
-server.ssl.enabled=false
 
 # Логгирование
 logging.level.org.springframework.web.client.RestTemplate=DEBUG
